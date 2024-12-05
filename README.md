@@ -9,6 +9,12 @@ pip install -r requirements.txt
 pip install -e diffusers
 ```
 
+### Train unconditional RectFlow on MNIST/EMNIST
+```sh
+. run.sh
+```
+
+<!--
 ### Train unconditional RectFlow on Flowers datatset
 ```sh
 python train_unconditional.py \
@@ -22,6 +28,7 @@ python train_unconditional.py \
   --lr_warmup_steps=500 \
   --mixed_precision=no
 ```
+-->
 
 #### Monitor training results
 ```sh

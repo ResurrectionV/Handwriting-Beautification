@@ -276,9 +276,13 @@ def parse_args():
         default=0.3,
         help="Probability of replacing an MNIST digit with a printed digit.",
     )
+    parser.add_argument(
+        "--augment_printed",
+        action="store_true",
+        help="Whether to add augmentation to the printed text.",
+    )
     #############################
-
-
+    
 
 
     args = parser.parse_args()
@@ -292,7 +296,8 @@ def parse_args():
     return args
 
 import random
-from PIL import Image
+import PIL
+from PIL import Image, ImageFilter
 def load_printed_digits(printed_digits_dir):
     """
     Loads printed digits into a dictionary where each digit (0-9) maps to a list of images
@@ -309,7 +314,7 @@ def load_printed_digits(printed_digits_dir):
                 digit_folder = os.path.join(font_path, str(digit))
                 if os.path.exists(digit_folder):
                     images = [
-                        Image.open(os.path.join(digit_folder, img_path)).convert("RGB")
+                        PIL.ImageOps.invert(Image.open(os.path.join(digit_folder, img_path)).convert("RGB"))
                         for img_path in os.listdir(digit_folder)
                         if img_path.endswith(".png")
                     ]
@@ -319,11 +324,13 @@ def load_printed_digits(printed_digits_dir):
     return printed_digits
 
 
-def transform_images_with_replacement(examples, augmentations, printed_digits, replacement_prob):
+def transform_images_with_replacement(examples, augmentations, augmentations_printed, printed_digits, replacement_prob, augment_printed):
     """
     Transforms images by applying augmentations and optionally replacing
     MNIST images with printed digits based on the replacement probability.
     """
+    if not augment_printed:
+        augmentations_printed = augmentations
     images = []
     for image, label in zip(examples["image"], examples["label"]):
         if printed_digits and random.random() < replacement_prob:
@@ -332,7 +339,10 @@ def transform_images_with_replacement(examples, augmentations, printed_digits, r
                 fonts_for_digit = printed_digits[label]
                 if fonts_for_digit:  # Ensure images exist for this digit
                     replacement_image = random.choice(fonts_for_digit)  # Adapted to dynamically pick a font
-                    augmented_image = augmentations(replacement_image)
+                    if augment_printed:
+                        dilation_width = random.randrange(1, 11, 2)
+                        replacement_image = replacement_image.resize((128, 128)).filter(ImageFilter.MaxFilter(dilation_width))
+                    augmented_image = augmentations_printed(replacement_image)
                 else:
                     augmented_image = augmentations(image.convert("RGB"))  # Fallback to MNIST image
             else:
@@ -537,6 +547,16 @@ def main(args):
             transforms.Normalize([0.5], [0.5]),
         ]
     )
+    augmentations_printed = transforms.Compose(
+        [
+            transforms.RandomRotation(45),
+            transforms.Resize(args.resolution, interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.CenterCrop(args.resolution) if args.center_crop else transforms.RandomCrop(args.resolution),
+            transforms.RandomHorizontalFlip() if args.random_flip else transforms.Lambda(lambda x: x),
+            transforms.ToTensor(),
+            transforms.Normalize([0.5], [0.5]),
+        ]
+    )
 
     # Load printed digits if the directory is provided
     printed_digits = None
@@ -552,7 +572,7 @@ def main(args):
         if printed_digits:
             # Use the replacement logic if printed digits are available
             return transform_images_with_replacement(
-                examples, augmentations, printed_digits, args.replacement_prob
+                examples, augmentations, augmentations_printed, printed_digits, args.replacement_prob, args.augment_printed
             )
         else:
             # Default functionality for MNIST only
