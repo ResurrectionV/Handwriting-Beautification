@@ -38,6 +38,7 @@ tensorboard --logdir rectflow-flowers-64
 
 #### Classifer Usage
 To train the classifier, you need to organize your dataset in a directory structure like this:
+```example
 printed_digits/
 ├── Comic_Sans/
 │   ├── 0/
