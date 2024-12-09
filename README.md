@@ -82,6 +82,7 @@ hand_write_beauty_test/
 │   └── ...
 └── ...
 Then run the remaining cells in the notebook sequentially to test the classifer.
+```
 
 ### Pretrained weights
 https://huggingface.co/ernestchu/scriptly-yours
