@@ -21,7 +21,8 @@ from torchvision import transforms
 from tqdm.auto import tqdm
 
 import diffusers
-from diffusers import DDPMPipeline, DDPMScheduler, UNet2DModel
+from diffusers import DDPMScheduler, UNet2DModel
+from pipeline_ddpm_custom import DDPMPipelineCustom
 from scheduling_rectflow import RectFlowScheduler
 from diffusers.optimization import get_scheduler
 from diffusers.training_utils import EMAModel
@@ -281,6 +282,11 @@ def parse_args():
         action="store_true",
         help="Whether to add augmentation to the printed text.",
     )
+    parser.add_argument(
+        "--disable_class_conditioning",
+        action="store_true",
+        help="Whether to add class conditioning.",
+    )
     #############################
     
 
@@ -332,6 +338,7 @@ def transform_images_with_replacement(examples, augmentations, augmentations_pri
     if not augment_printed:
         augmentations_printed = augmentations
     images = []
+    labels = []
     for image, label in zip(examples["image"], examples["label"]):
         if printed_digits and random.random() < replacement_prob:
             # Attempt replacement with a printed digit
@@ -350,7 +357,8 @@ def transform_images_with_replacement(examples, augmentations, augmentations_pri
         else:
             augmented_image = augmentations(image.convert("RGB"))  # Use MNIST image
         images.append(augmented_image)
-    return {"input": images}
+        labels.append(label)
+    return {"input": images,  "label": labels}
 
 
 
@@ -459,6 +467,7 @@ def main(args):
                 "UpBlock2D",
                 "UpBlock2D",
             ),
+            class_embed_type=None if args.disable_class_conditioning else "timestep",
         )
     else:
         config = UNet2DModel.load_config(args.model_config_name_or_path)
@@ -577,7 +586,8 @@ def main(args):
         else:
             # Default functionality for MNIST only
             images = [augmentations(image.convert("RGB")) for image in examples["image"]]
-            return {"input": images}
+            labels = [label for label in examples["label"]]
+            return {"input": images, "label": labels}
 
     # def transform_images(examples):
     #     images = [augmentations(image.convert("RGB")) for image in examples["image"]]
@@ -610,7 +620,7 @@ def main(args):
     # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
         run = os.path.split(__file__)[-1].split(".")[0]
-        accelerator.init_trackers(run)
+        accelerator.init_trackers(run, config=vars(args))
 
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
@@ -665,6 +675,7 @@ def main(args):
                 continue
 
             clean_images = batch["input"].to(weight_dtype)
+            labels = batch["label"].to(weight_dtype)
             # Sample noise that we'll add to the images
             noise = torch.randn(clean_images.shape, dtype=weight_dtype, device=clean_images.device)
             bsz = clean_images.shape[0]
@@ -681,7 +692,10 @@ def main(args):
                 # rectified flow training objective (velocity)
                 target = clean_images - noise
                 # Predict the noise residual
-                model_output = model(noisy_images, timesteps).sample
+                model_output = model(
+                    noisy_images, timesteps,
+                    class_labels=None if args.disable_class_conditioning else labels
+                ).sample
                 loss = F.mse_loss(model_output.float(), target.float())
                 accelerator.backward(loss)
 
@@ -742,7 +756,7 @@ def main(args):
                     ema_model.store(unet.parameters())
                     ema_model.copy_to(unet.parameters())
 
-                pipeline = DDPMPipeline(
+                pipeline = DDPMPipelineCustom(
                     unet=unet,
                     scheduler=noise_scheduler,
                 )
@@ -750,6 +764,7 @@ def main(args):
                 generator = torch.Generator(device=pipeline.device).manual_seed(0)
                 # run pipeline in inference (sample random noise and denoise)
                 images = pipeline(
+                    None if args.disable_class_conditioning else torch.tensor([3] * args.eval_batch_size).to(pipeline.device),
                     generator=generator,
                     batch_size=args.eval_batch_size,
                     num_inference_steps=args.ddpm_num_inference_steps,
@@ -783,7 +798,7 @@ def main(args):
                     ema_model.store(unet.parameters())
                     ema_model.copy_to(unet.parameters())
 
-                pipeline = DDPMPipeline(
+                pipeline = DDPMPipelineCustom(
                     unet=unet,
                     scheduler=noise_scheduler,
                 )

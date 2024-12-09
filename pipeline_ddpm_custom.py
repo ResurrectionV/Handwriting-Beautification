@@ -48,12 +48,14 @@ class DDPMPipelineCustom(DiffusionPipeline):
     @torch.no_grad()
     def __call__(
         self,
+        labels,
         batch_size: int = 1,
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
         num_inference_steps: int = 1000,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
         init_noise:Optional[torch.FloatTensor] = None,
+        clamp_output: bool = True,
     ) -> Union[ImagePipelineOutput, Tuple]:
         r"""
         The call function to the pipeline for generation.
@@ -119,12 +121,14 @@ class DDPMPipelineCustom(DiffusionPipeline):
 
         for t in self.progress_bar(self.scheduler.timesteps):
             # 1. predict noise model_output
-            model_output = self.unet(image, t).sample
+            model_output = self.unet(image, t, class_labels=labels).sample
 
             # 2. compute previous image: x_t -> x_t-1
             image = self.scheduler.step(model_output, t, image, generator=generator).prev_sample
 
-        image = (image / 2 + 0.5).clamp(0, 1)
+        image = (image / 2 + 0.5)
+        if clamp_output:
+            image = image.clamp(0, 1)
         if output_type != 'pt':
             image = image.cpu().permute(0, 2, 3, 1).numpy()
             if output_type == "pil":
