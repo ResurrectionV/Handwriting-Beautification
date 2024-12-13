@@ -1,10 +1,10 @@
-# Handwriting-Beautification
+# Scriptly Yours
 
 
 ### Environment setup
 ```sh
-conda create -n writebeau -y python=3.10
-conda activate writebeau
+conda create -n scriptlyyours -y python=3.10
+conda activate scriptlyyours
 pip install -r requirements.txt
 pip install -e diffusers
 ```
@@ -14,29 +14,15 @@ pip install -e diffusers
 . run.sh
 ```
 
+### Pretrained weights
+https://huggingface.co/ernestchu/scriptly-yours
+
+### Evaluation
+See main.ipynb
+
+
 <!--
-### Train unconditional RectFlow on Flowers datatset
-```sh
-python train_unconditional.py \
-  --dataset_name="huggan/flowers-102-categories" \
-  --resolution=64 --center_crop --random_flip \
-  --output_dir="rectflow-flowers-64" \
-  --train_batch_size=128 \
-  --num_epochs=100 \
-  --gradient_accumulation_steps=1 \
-  --learning_rate=1e-4 \
-  --lr_warmup_steps=500 \
-  --mixed_precision=no
-```
--->
-
-#### Monitor training results
-```sh
-tensorboard --logdir rectflow-flowers-64
-```
-
-
-#### Classifer Usage
+### Classifer Usage
 To train the classifier, you need to organize your dataset in a directory structure like this:
 ```example
 printed_digits/
@@ -83,10 +69,4 @@ hand_write_beauty_test/
 └── ...
 Then run the remaining cells in the notebook sequentially to test the classifer.
 ```
-
-### Pretrained weights
-https://huggingface.co/ernestchu/scriptly-yours
-
-### Evaluation
-WIP. See main.ipynb
-
+-->
